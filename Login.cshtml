@@ -1,0 +1,92 @@
+﻿@{
+    Layout = null;
+}
+@model ServiceNowAppTool.Models.LoginModel
+
+<html>
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Login Form</title>
+
+    <link href="~/Content/LoginPage.css" rel="stylesheet" />
+
+
+
+
+</head>
+<body style="background-color:#efefef">
+    <section class="container">
+        <div class="login">
+            <div class="col-md-4">
+                <span class="col-md-2">
+                    <img src="~/Images/logo.jpg" id="logo" />
+                </span>
+                <div class="col-md-2" style="color:#eb6c1f">
+                    <h3>Web Support Tool</h3>
+                </div>
+            </div>
+
+            <p>@Html.TextBoxFor(Model => Model.loginId, new { @id = "loginId", @placeholder = "Enter login id" })</p>
+            <p>@Html.TextBoxFor(Model => Model.password, new { @id = "password", @placeholder = "Enter password", @class = "make-pass" })
+            <p class="remember_me">
+                <label>
+                    <input type="checkbox" name="remember_me" id="remember_me">
+                    Remember me on this computer
+                </label>
+            </p>
+            <div class="LgBtn">
+                <input type="button" name="commit" class="LoginBtn" id="btnSubmit" value="Log In">
+            </div>
+
+            <span id="msg" style="color:red;font-weight:bold"></span>
+
+        </div>
+
+    
+    </section>
+    <script src="~/Scripts/jquery-3.1.1.min.js"></script>
+    @*<script src="~/Scripts/jquery-1.10.2.min.js"></script>*@
+
+    <script>
+        $(document).ready(function () {
+            
+            $(".make-pass").attr("type", "password");
+            $("#btnSubmit").click(function (e) {
+                
+                $('#msg').html('');
+
+                if ($("#loginId").val() != '' && $("#password").val()) {
+                    var loginModel = {
+                        loginId: $("#loginId").val(),
+                        password: $("#password").val(),
+                        remember_me: $("#remember_me").is(':checked')
+                    };
+
+                    $.ajax({
+                        url: '@Url.Action("Login","Home")',
+                        dataType: "json",
+                        type: "POST",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ loginModel: loginModel }),
+                        success: function (res) {
+                            
+                            if (res != "Login")
+                                window.location.href = res;
+                            else
+                                $('#msg').html('Please enter a valid username and password')
+                        },
+                        error: function (e) {
+                            
+                            $('#msg').html('Something happened!');
+                        }
+                    });
+                } else {
+                    $('#msg').html('Please provide user name and password')
+                }
+            })
+        });
+    </script>
+</body>
+</html>

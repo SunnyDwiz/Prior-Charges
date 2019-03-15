@@ -1,0 +1,349 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Queries>
+  <viewmaster>
+    <removedupicates>
+      declare @userid int,@count int
+      select @userid=UserId from VIEWMASTER.dbo.useraccount WITH(NOLOCK) where username='{0}';
+      if(@userid is not null)
+      Begin
+
+      delete from UserBusinessUnit where UserId = @userid and userBusinessUnitid in(SELECT
+      UserBusinessUnitid
+      FROM
+      (select  UserBusinessUnitid,RANK() OVER (PARTITION BY userid,BusinessUnitid ORDER BY UserBusinessUnitid desc) as rn from dbo.UserBusinessUnit WITH(NOLOCK) where userid=@userid) t
+      WHERE
+      t.rn &gt; 1)
+      select @count=@@ROWCOUNT
+      if(@count&gt;0)
+      begin
+
+      select 'Unmapped duplicated facilities :'+convert(varchar(10),@count)  Result
+      end
+      Else
+      Select 'No duplicate facilities are mapped to the user.' Result
+      End
+      ELSE
+      SELECT 'User doesn''t exist, Please verify user name.' Result
+    </removedupicates>
+    <facilitytype>
+      select pdmi  from pharmericacommon.dbo.facility WITH(NOLOCK)  where (pharmacycode='{0}' or corporationcode='{2}') and facilitycode='{1}'
+    </facilitytype>
+    <PharmacyCode>
+      select pharmacycode  from pharmericacommon.dbo.facility WITH(NOLOCK) where (pharmacycode='{0}' or corporationcode='{2}') and facilitycode='{1}'
+    </PharmacyCode>
+    <GetPharmaciesByCorp>
+      if('{0}'!='')
+      select distinct PharmacyCode,PharmacyName+' ('+PharmacyCode+')' PharmacyName from dbo.facilityview WITH(NOLOCK) where isactive=1 and isvmrxenabled=1 and corporationcode='{0}' order by PharmacyName
+      else
+      select distinct PharmacyCode,PharmacyName+' ('+PharmacyCode+')' PharmacyName from dbo.facilityview WITH(NOLOCK) where isactive=1 and isvmrxenabled=1 and corporationcode is null order by PharmacyName
+    </GetPharmaciesByCorp>
+    <pdmiinvoicedownload>
+      declare @accountno varchar(20);
+      select top 1 @accountno =  accountno from dbo.accountstatement  WITH(NOLOCK) where accountno like '{1}%'
+      IF(@accountno IS NULL)
+      select top 1 @accountno =  accountno from OnlineBillingArchive.dbo.accountstatement  WITH(NOLOCK) where accountno like '{1}%'
+      Select  FileName,ID,'PDMI','NARC' Archieve from dbo.PDMFile  WITH(NOLOCK) where filename in ({0})
+      Union all
+      Select FileName,ID,'ArchPDMI','ARC' Archieve from OnlineBillingArchive.dbo.PDMFile  WITH(NOLOCK) where filename in ({0})
+      order by ID DESC
+    </pdmiinvoicedownload>
+    <ffsinvoicedownload>
+      declare @accountno varchar(20);
+      select top 1 @accountno=  accountnumber from dbo.statementheader  WITH(NOLOCK) where accountnumber like '{1}%'
+      IF(@accountno IS NULL)
+      select top 1 @accountno=  accountnumber from OnlineBillingArchive.dbo.statementheader  WITH(NOLOCK) where accountnumber like '{1}%'
+      IF(@accountno IS NULL)
+      select top 1 @accountno=  accountno from dbo.FFS_ACCOUNTSTATEMENT  WITH(NOLOCK) where accountno like '{1}%'
+      Select I.AccountFileName as FileName,I.FileID ID,'OLD' as [GetFile],'NARC' Archieve  from dbo.StatementHeader S  WITH(NOLOCK)
+      JOIN dbo.Invoicedocuments I  WITH(NOLOCK) ON  substring(I.AccountFileName,1,8) = substring(s.AccountNumber,1,8) and I.ControlNumber = S.ControlNumber
+      where  filetype = 'H' and I.AccountFileName in ({0})
+      union all
+      Select FileName,ID,'NEW' as [GetFile],'NARC' Archieve from dbo.FFSFile  WITH(NOLOCK) where filename in ({0})
+      union all
+      Select I.AccountFileName as FileName,FileID ID,'OLD' as [GetFile],'ARC' Archieve from
+      OnlineBillingArchive.dbo.StatementHeader S  WITH(NOLOCK) JOIN OnlineBillingArchive.dbo.invoicedocuments I  WITH(NOLOCK) ON  substring(I.AccountFileName,1,8) = substring(s.AccountNumber,1,8) and I.ControlNumber = S.ControlNumber
+      where  filetype = 'H' and  I.AccountFileName in ({0})
+      order by ID DESC
+    </ffsinvoicedownload>
+    <pdmiinvoiceblob>
+      Select top 1 FileName,FileData,ID from dbo.PDMFile  WITH(NOLOCK) where id=({0}) order by 1 desc
+    </pdmiinvoiceblob>
+    <Oldffsinvoicedownload>
+      Select top 1 AccountFileName FileName,FileData,FileID from dbo.invoicedocuments  WITH(NOLOCK) where FileID=({0}) order by 1 desc
+    </Oldffsinvoicedownload>
+    <Newffsinvoicedownload>
+      Select top 1 FileName,FileData,ID from dbo.FFSFile  WITH(NOLOCK) where id=({0}) order by 1 desc
+    </Newffsinvoicedownload>
+    <useractivity>
+      declare @userid int
+      select @userid=UserId from VIEWMASTER.dbo.useraccount  WITH(NOLOCK) where username='{0}';
+      if(@userid is not null)
+      select top 15 ua.userid,isactive,islocked ,ua.FacilityId,AuthUser,BusinessRole,IpAddress,actionname,ScriptName,ua.CreatedDate from dbo.useractivity ua  WITH(NOLOCK)  join dbo.UserAuthentication_Forms uaf  WITH(NOLOCK) on ua.userid=uaf.userid
+      join dbo.useraccount uac  WITH(NOLOCK) on ua.userid =uac.userid  where ua.userid=@userid order by UserActivityId desc
+    </useractivity>
+    <UnlockUserAccount>
+      update dbo.UserAuthentication_Forms set FailedAttemptCount=0,islocked=0,ModifiedBy='WST_'+'{1}',modifieddate=getdate() where userid='{0}'
+    </UnlockUserAccount>
+    <ActivateUser>
+      update dbo.useraccount set isactive=1,ModifiedBy='WST_'+'{1}',modifieddate=getdate() where userid='{0}'
+    </ActivateUser>
+    <InvoiceNotifications>
+      Update dbo.notification  set IsActive=0,ModifiedBy='WST_'+'{0}',ModifiedDate=getdate() where (destination is null or destination='') and IsActive=1
+    </InvoiceNotifications>
+    <ResendInvoiceNotif>
+      update  dbo.InvoiceNotificationQueue set InvoiceAvailableFlag=1,ModifiedBy='WST_'+'{3}' where InvoiceNotificationQueueId =(Select top 1 inq.InvoiceNotificationQueueId
+      from dbo.InvoiceNotificationQueue inq WITH(NOLOCK)
+      join dbo.Notification n WITH(NOLOCK) on n.NotificationId = inq.notificationId
+      join dbo.NotificationType nt WITH(NOLOCK) on n.NotificationTypeId = nt.NotificationTypeId
+      join dbo.NotificationMode nm  WITH(NOLOCK) on n.NotificationModeId = nm.NotificationModeId
+      join dbo.facilityview fv WITH(NOLOCK) on n.facilityid=fv.FacilityBuId
+      --join pharmericacommon..facility pf on pf.facilitycode+pf.pharmacycode=fv.facilitycode+fv.pharmacycode
+      Where fv.pharmacycode='{0}' and fv.facilitycode='{1}' and n.Destination='{2}' order by InvoiceNotificationQueueId desc)
+    </ResendInvoiceNotif>
+    <Archpdmiinvoiceblob>
+      Select top 1 FileName,FileData,ID from OnlineBillingArchive.dbo.PDMFile WITH(NOLOCK) where id=({0}) order by 1 desc
+    </Archpdmiinvoiceblob>
+    <ArchOldffsinvoicedownload>
+      Select top 1 AccountFileName FileName,FileData,FileID from OnlineBillingArchive.dbo.invoicedocuments WITH(NOLOCK) where FileID=({0}) order by 1 desc
+    </ArchOldffsinvoicedownload>
+    <ArchNewffsinvoicedownload>
+      Select top 1 FileName,FileData,ID from OnlineBillingArchive.dbo.FFSFile WITH(NOLOCK) where id=({0}) order by 1 desc
+    </ArchNewffsinvoicedownload>
+    <WillowValley>
+      SElect distinct top 1 FileName FROM dbo.FIRAuditLogDetails WITH(NOLOCK) Where CustomMessage IN ('5702-079-07005','5702-080-07006','5702-081-07007','5702-082-07008') AND FileName LIKE 'H%' Order by 1 desc
+    </WillowValley>
+    <CheckFeedInDev>
+      declare @AuditLogID int,@maxid int
+      select @AuditLogID=max(AuditLogID) FROM dbo.FIRAUDITLOGDETAILS WITH(NOLOCK) WHERE FILENAME='{0}' and executionstatus='EA006'
+      SELECT @maxid=MAX(AuditLogID) FROM FIRAUDITLOGDETAILS
+      print @maxid
+      print @AuditLogID
+      if(@AuditLogID=@maxid)
+      select 1 result
+      else
+      select 0 result
+    </CheckFeedInDev>
+    <CheckPendInvoiceNotifications>
+      Select Count(1) Result
+      from dbo.InvoiceNotificationQueue inq WITH(NOLOCK)
+      join dbo.Notification n WITH(NOLOCK) on n.NotificationId = inq.notificationId
+      join dbo.NotificationType nt WITH(NOLOCK) on n.NotificationTypeId = nt.NotificationTypeId
+      join dbo.NotificationMode nm WITH(NOLOCK) on n.NotificationModeId = nm.NotificationModeId
+      Where InvoiceAvailableFlag = 1 and n.IsActive = 1
+    </CheckPendInvoiceNotifications>
+    <ResendInvoiceNotificaionsProcess>
+      Select top 1--inq.InvoiceAvailableFlag,n.Destination
+      n.IsActive,inq.ModifiedDate LastSentDate
+      from dbo.InvoiceNotificationQueue inq WITH(NOLOCK)
+      join dbo.Notification n WITH(NOLOCK) on n.NotificationId = inq.notificationId
+      join dbo.NotificationType nt WITH(NOLOCK) on n.NotificationTypeId = nt.NotificationTypeId
+      join dbo.NotificationMode nm WITH(NOLOCK) on n.NotificationModeId = nm.NotificationModeId
+      join facilityview fv on n.facilityid=fv.FacilityBuId
+      --join pharmericacommon..facility pf on pf.facilitycode+pf.pharmacycode=fv.facilitycode+fv.pharmacycode
+      Where fv.pharmacycode='{0}' and fv.facilitycode='{1}' and n.Destination='{2}'
+    </ResendInvoiceNotificaionsProcess>
+    <GetStatementDate>
+      if exists(select 1 from pharmericacommon.dbo.facility WITH(NOLOCK) where facilitycode='{1}' and pharmacycode='{0}' and pdmi=1)
+      begin
+      select top 1 cast(statementdate as date) from onlinebilling.dbo.accountstatement WITH(NOLOCK) where accountno like '{0}-{1}%' order by 1 desc
+      end
+      else
+      begin
+      select TOP 1 statementdate from (
+      select top 1 cast(statementdate as date) statementdate from onlinebilling.dbo.statementheader WITH(NOLOCK) where accountnumber like '{0}-{1}%' ORDER BY 1 DESC
+      union
+      select top 1 cast(statementdate as date) statementdate from onlinebilling.dbo.FFS_ACCOUNTSTATEMENT  WITH(NOLOCK) where accountno like '{0}-{1}%' ORDER BY 1 DESC
+      ) FFSSTATEMENT ORDER BY statementdate DESC
+      end
+    </GetStatementDate>
+    <AddPharPharmericaComn>
+      IF NOT EXISTS(SELECT 1 FROM dbo.[Pharmacy] WITH(NOLOCK) WHERE [PharmacyCode]=@PHARMACYCODE)
+      BEGIN
+      INSERT INTO [dbo].[Pharmacy]([PharmacyCode],[PharmacyName],[GeneralManager],[Address],[Hours],[phone_area_code]
+      ,[phone_prefix],[phone_suffix],[fax_area_code],[fax_prefix],[fax_suffix],[ActiveFlag],[Iteration],[CreateUserId],[CreateTimeStamp]
+      ,[UpdateUserId],[UpdateTimeStamp],[NCPDPID],[NPI],[PharmacyEmail],[CensusEmail],[State],[UseOnlyFoilback],[SubsidiaryPharmacy])
+      VALUES
+      (@PHARMACYCODE,@PHARMACYNAME,@GeneralManager,@Address,@Hours,@phone_area_code,@phone_prefix,
+      @phone_suffix,@fax_area_code,@fax_prefix,@fax_suffix,1,@Iteration,'WST_'+'{0}',GetDate()
+      ,'WST_'+'{0}',GetDate(),@NCPDPID,@NPI,@PharmacyEmail,@CensusEmail,@State,@UseOnlyFoilback,@SubsidiaryPharmacy)
+      SELECT 'Added successfully.' Result
+      end
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+    </AddPharPharmericaComn>
+
+    <AddPDO>
+      IF NOT EXISTS(SELECT 1 FROM dbo.[Pharmacy] WITH(NOLOCK) WHERE [PharmacyCode]='{0}')
+      insert into dbo.pharmacy([PHARMACY_CODE]
+      ,[CORP_ID],[REGION_ID],[REGION_NAME],[HUB_PHARMACY_ID],[PHARMACY_NAME]
+      ,[PHARMACY_DESC],[ADDR_L1],[ADDR_L2],[CITY],[STATE]
+      ,[ZIP],[PLUS_FOUR],[PHONE_NUM],[FAX_NUM],[CREATE_DATE]
+      ,[CREATE_USER],[UPDATE_DATE],[UPDATE_USER],[ACTIVE_IND],[MANUALFLAG])
+      values('{0}'
+      ,'{1}','{2}','{3}','{4}','{5}',
+      '{6}','{7}','{8}','{9}','{10}'
+      ,'{11}','{12}','{13}','{14}',GETDATE()
+      ,'WST',GETDATE(),'WST','{19}','{20}')
+      SELECT 'Added successfully.' Result
+      end
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+    </AddPDO>
+    <AddPharDocuTrack>
+      IF NOT EXISTS(SELECT 1 FROM dbo.[sites] WITH(NOLOCK) WHERE [PharmericaPharmacyCode]=@PHARMACY_CODE)
+      BEGIN
+      INSERT INTO [dbo].[sites]([PharmericaPharmacyCode],[DocuTrackFolderId],[DocuTrackSqlConnectionString],[DocuTrackWebServiceUri],[DocuTrackVersion],[Active])
+      VALUES(@PHARMACY_CODE,@DocuTrackFolderId,@DocuTrackSqlConnectionString,@DocuTrackWebServiceUri,@Version,@ACTIVE_IND)
+      SELECT 'Added successfully.' Result
+      end
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+    </AddPharDocuTrack>
+
+    <AddPharEmanifest>
+      IF NOT EXISTS(SELECT 1 FROM dbo.[Pharmacy] WITH(NOLOCK) WHERE [Pharmacy]='{0}')
+      BEGIN
+      INSERT INTO [dbo].[Pharmacy]([Pharmacy],[Pharmacyname],[Address1],[Address2],[City],[State],[Phone]
+      ,[Fax],[ZipCode],[DocuTrackEmail])
+      VALUES
+      ('{0}','{1}','{2}','{3}','{4}','{5}','{6}',
+      '{7}','{8}','{9}')
+      SELECT 'Added successfully.' Result
+      end
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+    </AddPharEmanifest>
+    <GetDistricts>
+      select  DistrictId,Name from dbo.district WITH(NOLOCK)
+    </GetDistricts>
+    <GetRegions>
+      select RegionId,Name from dbo.[region] WITH(NOLOCK)
+    </GetRegions>
+    <GetTimeZones>
+      select TimeZoneId,TimeZoneName from dbo.TimeZone WITH(NOLOCK)
+    </GetTimeZones>
+    <AddPharSnt>
+      IF NOT EXISTS (SELECT 1 FROM dbo.Pharmacy WITH(NOLOCK) WHERE Pharmacycode=@PHARMACY_CODE)
+      BEGIN
+      INSERT INTO [dbo].[Pharmacy]
+      ([PharmacyCode],[CorpId],[PharmacyName],[SqlConnection],[RegionId],[DistrictId],[pkiFolder],[SiteOrderThreshhold],[LastLtc400Refresh],[LastDocuTrackRefresh],[DocuTrackCacheLife]
+      ,[ServiceURL],[PharmTimeZone],[CreateDate],[CreateUser],[UpdateDate],[UpdateUser],[TimeZoneId],[DeaNumber],ExcludeFromMetrics,[EnableForSureCostBeta],UploadToSureCost)
+
+      VALUES(@PHARMACY_CODE,1,@PHARMACY_NAME,@SqlConnection,@Region_Id,@DistrictId,@pkiFolder,@SiteOrderThreshhold,GETDATE(),'1900-01-01 00:00:00.0000000',@DocuTrackCacheLife
+      ,@ServiceURI,@TempTimeZone,GETDATE(),'WST_'+'{0}',GETDATE(),'WST_'+'{0}',@TimeZoneId,@DeaNumber,@ExcludeFromMetrics,@EnableForSureCostBeta,@UploadToSureCost)
+
+      SELECT 'Added successfully.' Result
+      END
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+    </AddPharSnt>
+    <PhrTimeZones>
+      SELECT  1 Id,'CST' zone
+      union
+      SELECT 2 Id,'EST' zone
+      union
+      SELECT 3 Id,'HST' zone
+      union
+      SELECT 4 Id,'MST' zone
+      union
+      SELECT 5 Id,'PST' zone
+    </PhrTimeZones>
+    <Corprations>
+      select CORP_ID,CORPORATION_CODE from PriorAuth.dbo.Corporation WITH(NOLOCK) ORDER BY CORPORATION_CODE
+    </Corprations>
+    <AddPharPriorAuth>
+      IF NOT EXISTS (SELECT 1 FROM [PriorAuth].dbo.PHARMACY WITH(NOLOCK) WHERE PHARMACY_CODE=@PHARMACY_CODE)
+      BEGIN
+      Insert into [PriorAuth].dbo.PHARMACY
+      (PHARMACY_ID,PHARMACY_CODE,CORP_ID,Region_Id,REGION_NAME,PHARMACY_NAME,PHARMACY_DESC,ADDR_L1,ADDR_L2,CITY,STATE,ZIP,PLUS_FOUR,PHONE_NUM,CREATE_DATE,CREATE_USER,UPDATE_DATE,UPDATE_USER,ACTIVE_IND,MANUALFLAG,FAX_NUM)
+      VALUES(@PHARMACY_ID,@PHARMACY_CODE,@CORP_ID,@Region_Id,@REGION_NAME,@PHARMACY_NAME,@PHARMACY_DESC,@ADDR_L1,@ADDR_L2,@CITY,
+      @STATE,@ZIP,@PLUS_FOUR,@PHONE_NUM,GETDATE(),'WST_'+'{0}',GETDATE(),'WST_'+'{0}',@ACTIVE_IND,@MANUALFLAG,@FAX_NUM)
+      SELECT 'Added successfully.' Result
+      END
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result
+      <!--IF NOT EXISTS (SELECT 1 FROM [PriorAuth].dbo.PHARMACY WITH(NOLOCK) WHERE PHARMACY_CODE=@PHARMACY_CODE)
+      BEGIN
+      Insert into [PriorAuth].dbo.PHARMACY
+      (PHARMACY_ID,PHARMACY_CODE,CORP_ID,Region_Id,REGION_NAME,PHARMACY_NAME,PHARMACY_DESC,ADDR_L1,ADDR_L2,CITY,STATE,ZIP,PLUS_FOUR,PHONE_NUM,CREATE_DATE,CREATE_USER,UPDATE_DATE,UPDATE_USER,ACTIVE_IND,ExcludeFromMetrics,MANUALFLAG,FAX_NUM)
+      VALUES(@PHARMACY_ID,@PHARMACY_CODE,@CORP_ID,@Region_Id,@REGION_NAME,@PHARMACY_NAME,@PHARMACY_DESC,@ADDR_L1,@ADDR_L2,@CITY,
+      @STATE,@ZIP,@PLUS_FOUR,@PHONE_NUM,GETDATE(),'WST_'+'{0}',GETDATE(),'WST_'+'{0}',@ACTIVE_IND,@ExcludeFromMetrics,@MANUALFLAG,@FAX_NUM)
+      SELECT 'Added successfully.' Result
+      END
+      ELSE
+      SELECT 'Pharmacy code already exist.' Result-->
+    </AddPharPriorAuth>
+
+    <AddPDOPharmacist>
+      <!--IF NOT EXISTS (SELECT 1 FROM [PDO]..Party WHERE PHARMACY_ID={0})-->
+      <!--FIRST_NAME,LAST_NAME,MIDDLE_NAME,EMP_IND,TITLE,CREATE_DATE,CREATE_USER,UPDATE_DATE,UPDATE_USER,PARTY_TYPE_ID,PHARMACY_ID,EMP_LOCATION,EMP_TYPE,EMP_NO-->
+      declare @PName varchar(200);
+      select @PName=PHARMACY_Name from dbo.pharmacy WITH(NOLOCK) where pharmacy_code={0}
+      insert into PDO.dbo.Party(FIRST_NAME,LAST_NAME,PHARMACY_ID,MIDDLE_NAME,EMP_IND,TITLE,CREATE_DATE,CREATE_USER,UPDATE_DATE,UPDATE_USER,PARTY_TYPE_ID,EMP_TYPE,EMP_NO,EMP_LOCATION)
+      values('{1}','{2}',{0},'','Y','Pharmacist',GETDATE(),'WST_'+'{3}','','','6','',0,@PName);
+    </AddPDOPharmacist>
+    <ActivatePDOPharmacist>
+      update PDO.dbo.Party set Emp_No=0,UPDATE_DATE=GETDATE(),UPDATE_USER='WST_'+'{1}' where PARTY_ID={0}
+    </ActivatePDOPharmacist>
+    <DeactivatePDOPharmacist>
+      update PDO.dbo.Party set Emp_No=null,UPDATE_DATE=GETDATE(),UPDATE_USER='WST_'+'{1}' where PARTY_ID={0}
+    </DeactivatePDOPharmacist>
+    <CheckPDOPharmacist>
+      select count(1)  from  PDO.dbo.Party WITH(NOLOCK) where FIRST_NAME='{2}' and LAST_NAME='{1}' and PHARMACY_ID={0}
+    </CheckPDOPharmacist>
+    <GetPDOPharmacists>
+      select  PARTY_ID,FIRST_NAME,	LAST_NAME,EMP_IND,TITLE,PHARMACY_ID ,EMP_NO from  PDO.dbo.Party where  PHARMACY_ID={0}  and (FIRST_NAME like '{1}%' or LAST_NAME like '{1}%')
+    </GetPDOPharmacists>
+    <AddPharmacist>
+      IF(select count(1) from PDO.dbo.Party WITH(NOLOCK) where PHARMACY_ID =RTRIM(LTRIM({0})) and FIRST_NAME + ' ' +Last_Name in('{1}'))>0
+      begin
+      select Party_ID,FIRST_NAME,LAST_NAME,PHARMACY_ID,Emp_Ind,Emp_No,'Y' result from PDO.dbo.party where PHARMACY_ID =RTRIM(LTRIM({0})) and FIRST_NAME + ' ' +Last_Name in('{1}')
+      end
+      else
+      select 'No Record' as result
+    </AddPharmacist>
+    <GetPharmacies>
+      select PHARMACY_CODE,PHARMACY_NAME+' ('+Pharmacy_Code+')'  from PDO.dbo.PHARMACY WHERE ACTIVE_IND='Y' order by 2
+    </GetPharmacies>
+    <GetCorporationsVmrx>
+      select DISTINCT CASE WHEN CODE IS NULL THEN '' else CODE END CODE, CASE WHEN CODE IS NULL THEN '' ELSE  NAME END NAME from businessunit where BusinessUnitTypeId=1 and isactive=1 order by 1
+    </GetCorporationsVmrx>
+    <GetFacilitiesByCorpVmrx>
+      if('{1}'!='')
+      select distinct facilityCode,facilityName+' ('+facilityCode+')' facilityName from facilityview where isactive=1 and isvmrxenabled=1 and pharmacycode='{0}' and corporationcode='{1}' order by facilityName
+      else
+      select distinct facilityCode,facilityName+' ('+facilityCode+')' facilityName from facilityview where isactive=1 and isvmrxenabled=1 and pharmacycode='{0}'  and corporationcode is null order by facilityName
+    </GetFacilitiesByCorpVmrx>
+    <GetPharmaciesVmrx>
+      select distinct PharmacyCode,PharmacyName+' ('+PharmacyCode+')' PharmacyName from facilityview where isactive=1 and isvmrxenabled=1 order by PharmacyName
+    </GetPharmaciesVmrx>
+    <GetFacilitiesVmrx>
+      select distinct facilityCode,facilityName+' ('+facilityCode+')' facilityName from facilityview where isactive=1 and isvmrxenabled=1 and pharmacycode='{0}' order by facilityName
+    </GetFacilitiesVmrx>
+    <DocutrackSqlConnection>
+      LTCDTSQLCNT1,SERVER=LTCDTSQLCNT1; FAILOVER PARTNER=LTCDTSQLCENT2;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Tr@ckB0ard>
+      LTCDTSQLEST1,SERVER=LTCDTSQLEST1; FAILOVER PARTNER=LTCDTSQLEST2;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Tr@ckB0ard>
+      LTCDTSQLEST21,SERVER=LTCDTSQLEST21; FAILOVER PARTNER=LTCDTSQLEST22;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev>
+      LTCDTSQLHAW1,SERVER=LTCDTSQLHAW1; FAILOVER PARTNER=LTCDTSQLHAW2;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Password1>
+      LTCDTSQLMTN1,SERVER=LTCDTSQLMTN1; FAILOVER PARTNER=LTCDTSQLMTN2;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Tr@ckB0ard>
+      LTCDTSQLPAC1,SERVER=LTCDTSQLPAC1; FAILOVER PARTNER=LTCDTSQLPAC2;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Tr@ckB0ard>
+      LTCDTSQLTX1\DT4124,SERVER=LTCDTSQLTX1\DT4124;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Pa55word>
+      LTCDTSQLTX1\DT4125,SERVER=LTCDTSQLTX1\DT4125;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Pa55word>
+      LTCDTSQLTX1\DT4148,SERVER=LTCDTSQLTX1\DT4148;INITIAL CATALOG=DocMgmt;user id=DocuDashboard; password=Pa55word>
+      LTCDTSQLTX1\DT7111,SERVER=LTCDTSQLTX1\DT7111; FAILOVER PARTNER=LTCDTSQLTX2\DT7111;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev>
+    </DocutrackSqlConnection>
+    <sntSqlConnection>
+      LTCDTSQLCNT1,SERVER=LTCDTSQLCNT1; FAILOVER PARTNER=LTCDTSQLCENT2;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLEST1,SERVER=LTCDTSQLEST1; FAILOVER PARTNER=LTCDTSQLEST2;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLEST21,SERVER=LTCDTSQLEST21; FAILOVER PARTNER=LTCDTSQLEST22;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLHAW1,SERVER=LTCDTSQLHAW1; FAILOVER PARTNER=LTCDTSQLHAW2;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLMTN1,SERVER=LTCDTSQLMTN1; FAILOVER PARTNER=LTCDTSQLMTN2;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLPAC1,SERVER=LTCDTSQLPAC1; FAILOVER PARTNER=LTCDTSQLPAC2;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLTX1\DT4124,SERVER=LTCDTSQLTX1\DT4124; FAILOVER PARTNER=LTCDTSQLTX2\DT4124;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLTX1\DT4125,SERVER=LTCDTSQLTX1\DT4125; FAILOVER PARTNER=LTCDTSQLTX2\DT4125;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLTX1\DT4148,SERVER=LTCDTSQLTX1\DT4148; FAILOVER PARTNER=LTCDTSQLTX2\DT4148;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+      LTCDTSQLTX1\DT7111,SERVER=LTCDTSQLTX1\DT7111; FAILOVER PARTNER=LTCDTSQLTX2\DT7111;INITIAL CATALOG=DocMgmt;user id=AppDev; password=AppDev;>
+    </sntSqlConnection>
+  </viewmaster>
+  <WillowValleyEmail></WillowValleyEmail>
+</Queries>
