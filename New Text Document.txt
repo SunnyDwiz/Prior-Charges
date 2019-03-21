@@ -1,0 +1,1 @@
+https://www.tutorialspoint.com/How-to-retrieve-data-from-JSON-file-using-jQuery-and-Ajax///////////https://www.carnaghan.com/using-jquery-ajax-to-retrieve-sample-json-data/
